@@ -3,11 +3,21 @@ import easygui
 import pygame
 
 ANCHO = 1300
-ALTO = 800
+ALTO = 700
 MAX_NIVELES_GRAFICO = 6
 
 
 def pedir_directorio():
+    """
+    Subrutina que pide al usuario seleccionar el directorio que se
+    desea analizar.
+    Entradas:
+    Ninguna
+    Salidas:
+    Ruta del directorio seleccionado
+    Restricciones:
+    El usuario debe seleccionar una carpeta valida
+    """
     ruta = easygui.diropenbox("Seleccione el directorio que desea analizar")
     if ruta == None:
         raise Exception("Debe seleccionar un directorio.")
@@ -18,6 +28,15 @@ def pedir_directorio():
 
 
 def formato_tamano(tamano):
+    """
+    Subrutina que convierte una cantidad de bytes a una unidad mas facil de leer.
+    Entradas:
+    tamano: numero entero con el tamano en bytes
+    Salidas:
+    String con el tamano en B, KB, MB, GB o TB
+    Restricciones:
+    tamaño debe ser mayor o igual que cero
+    """
     if tamano < 1024:
         return str(tamano) + " B"
     if tamano < 1024 ** 2:
@@ -30,10 +49,28 @@ def formato_tamano(tamano):
 
 
 def crear_diccionario_archivo(ruta):
+    """
+    Subrutina que crea el diccionario que representa un archivo.
+    Entradas:
+    ruta: ruta absoluta o valida de un archivo
+    Salidas:
+    Diccionario con la informacion del archivo
+    Restricciones:
+    ruta debe corresponder a un archivo
+    """
     return {"file": True, "nombre": os.path.basename(ruta), "ruta": ruta, "tamano": os.path.getsize(ruta)}
 
 
 def crear_diccionario_directorio(ruta):
+    """
+    Subrutina que crea el diccionario base que representa un directorio.
+    Entradas:
+    ruta: ruta valida de un directorio
+    Salidas:
+    Diccionario con la informacion base del directorio
+    Restricciones:
+    ruta debe corresponder a un directorio
+    """
     nombre = os.path.basename(ruta)
     if nombre == "":
         nombre = ruta
@@ -41,6 +78,15 @@ def crear_diccionario_directorio(ruta):
 
 
 def ordenar_archivos(top):
+    """
+    Subrutina que ordena la lista del top de archivos de mayor a menor tamano.
+    Entradas:
+    top: lista de diccionarios de archivos
+    Salidas:
+    La lista queda ordenada
+    Restricciones:
+    Cada elemento debe tener la llave tamaño
+    """
     for i in range(len(top) - 1):
         for j in range(len(top) - i - 1):
             if top[j]["tamano"] < top[j + 1]["tamano"]:
@@ -48,6 +94,16 @@ def ordenar_archivos(top):
 
 
 def ordenar_directorios(top):
+    """
+    Subrutina que ordena la lista del top de directorios de mayor a menor cantidad
+    de archivos directos.
+    Entradas:
+    top: lista de diccionarios de directorios
+    Salidas:
+    La lista queda ordenada
+    Restricciones:
+    Cada elemento debe tener la llave archivos_directos
+    """
     for i in range(len(top) - 1):
         for j in range(len(top) - i - 1):
             if top[j]["archivos_directos"] < top[j + 1]["archivos_directos"]:
@@ -55,6 +111,16 @@ def ordenar_directorios(top):
 
 
 def actualizar_top_archivos(top_archivos, archivo):
+    """
+    Subrutina que actualiza el top 10 global de archivos mas grandes.
+    Entradas:
+    top_archivos: lista con los archivos mas grandes
+    -archivo: diccionario del archivo analizado
+    Salidas:
+    La lista top_archivos queda actualizada
+    Restricciones:
+    archivo debe ser un diccionario con file True y tamaño
+    """
     top_archivos.append(archivo)
     ordenar_archivos(top_archivos)
     while len(top_archivos) > 10:
@@ -62,6 +128,17 @@ def actualizar_top_archivos(top_archivos, archivo):
 
 
 def actualizar_top_directorios(top_directorios, directorio):
+    """
+    Subrutina que actualiza el top 10 global de directorios con mas
+    archivos directos.
+    Entradas:
+    top_directorios: lista con los directorios
+    directorio: diccionario del directorio analizado
+    Salidas:
+    La lista top_directorios queda actualizada.
+    Restricciones:
+    directorio debe tener la llave archivos_directos
+    """
     top_directorios.append(directorio)
     ordenar_directorios(top_directorios)
     while len(top_directorios) > 10:
@@ -69,6 +146,18 @@ def actualizar_top_directorios(top_directorios, directorio):
 
 
 def analizar_directorio(ruta, top_archivos, top_directorios):
+    """
+    Subrutina que analiza un directorio de forma recursiva y genera
+    un diccionario anidado, si algun elemento no se lee, se ignora
+    Entradas:
+    ruta: ruta del directorio a analizar
+    top_archivos: lista global de archivos mas grandes
+    top_directorios: lista global de directorios con mas archivos directos
+    Salidas:
+    Diccionario anidado con el directorio y sus hijos
+    Restricciones:
+    La ruta debe ser accesible
+    """
     directorio = crear_diccionario_directorio(ruta)
     try:
         elementos = os.listdir(ruta)
@@ -95,6 +184,16 @@ def analizar_directorio(ruta, top_archivos, top_directorios):
 
 
 def contar_archivos_y_directorios(datos):
+    """
+    Subrutina que cuenta cuantos archivos y directorios hay dentro
+    del diccionario anidado.
+    Entradas:
+    -datos: diccionario de archivo o directorio
+    Salidas:
+    Tupla con cantidad de archivos y cantidad de directorios
+    Restricciones:
+    datos debe tener la llave file
+    """
     if datos["file"] == True:
         return 1, 0
     
@@ -108,22 +207,63 @@ def contar_archivos_y_directorios(datos):
 
 
 def recortar_texto(texto, largo):
+    """
+    Subrutina que recorta un texto si supera un largo maximo.
+    Entradas:
+    texto: texto que se desea recortar
+    largo: cantidad maxima de caracteres
+    Salidas:
+    Texto original o texto recortado
+    Restricciones:
+    texto debe ser string y largo entero positivo
+    """
     if len(texto) <= largo:
         return texto
     return texto[:largo - 3] + "..."
 
 
 def color_por_nivel(nivel):
+    """
+    Subrutina que retorna un color diferente segun el nivel del grafico.
+    Entradas:
+    nivel: nivel de profundidad del elemento
+    Salidas:
+    Tupla RGB con el color
+    Restricciones:
+    nivel debe ser entero mayor o igual que cero
+    """
     colores = [(232, 139, 193), (190, 165, 235), (152, 219, 165), (229, 157, 157), (246, 207, 132), (145, 204, 230), (207, 162, 218), (180, 210, 120)]
     return colores[nivel % len(colores)]
 
 
 def dibujar_texto(ventana, fuente, texto, color, x, y):
+    """
+    Subrutina que dibuja texto en la ventana de pygame.
+    Entradas:
+    ventana: superficie de pygame
+    fuente: fuente de pygame
+    texto: string que se desea mostrar
+    color: color RGB.
+    x, y: posicion del texto
+    Salidas:
+    Texto dibujado en pantalla
+    Restricciones:
+    pygame debe estar iniciado
+    """
     imagen = fuente.render(texto, True, color)
     ventana.blit(imagen, (x, y))
 
 
 def ordenar_hijos_por_tamano(hijos):
+    """
+    Subrutina que ordena una lita de hijos de mayor a menor tamaño
+    Entradas:
+    hijos: lista de diccionarios
+    Salidas:
+    Lista ordenada de mayor a menor tamaño
+    Restricciones:
+    Cada hijo debe tener la llave tamaño
+    """
     copia = hijos[:]
     for i in range(len(copia) - 1):
         for j in range(len(copia) - i - 1):
@@ -133,6 +273,20 @@ def ordenar_hijos_por_tamano(hijos):
 
 
 def dibujar_rectangulo(ventana, fuente, datos, x, y, ancho, alto, nivel):
+    """
+    Subrutina que dibuja un rectangulo que representa un archivo o directorio.
+    Entradas:
+    ventana: superficie de pygame
+    fuente: fuente para texto
+    datos: diccionario del elemento
+    x, y: posicion inicial
+    ancho, alto: dimensiones del rectangulo
+    nivel: profundidad del elemento
+    Salidas:
+    Rectangulo dibujado en pantalla
+    Restricciones:
+    ancho y alto deben ser positivos
+    """
     if ancho <= 1 or alto <= 1:
         return
     color = color_por_nivel(nivel)
@@ -147,6 +301,21 @@ def dibujar_rectangulo(ventana, fuente, datos, x, y, ancho, alto, nivel):
 
 
 def dibujar_mapa(ventana, fuente, datos, x, y, ancho, alto, nivel):
+    """
+    Subrutina que dibuja el mapa de espacio en disco usando rectangulos
+    proporcionales.
+    Entradas:
+    ventana: superficie de pygame
+    fuente: fuente de pygame
+    datos: diccionario anidado
+    x, y: posicion inicial
+    ancho, alto: dimensiones disponibles
+    nivel: profundidad actual
+    Salidas:
+    Grafico dibujado en pantalla
+    Restricciones:
+    datos debe ser un diccionario valido
+    """
     if ancho <= 1 or alto <= 1:
         return
     dibujar_rectangulo(ventana, fuente, datos, x, y, ancho, alto, nivel)
@@ -184,6 +353,18 @@ def dibujar_mapa(ventana, fuente, datos, x, y, ancho, alto, nivel):
 
 
 def dibujar_top_archivos(ventana, fuente, top_archivos, x, y):
+    """
+    Subrutina que dibuja el reporte del top 10 global de archivos mas grandes.
+    Entradas:
+    ventana: superficie de pygame
+    fuente: fuente de pygame
+    top_archivos: lista con los archivos mas grandes
+    x, y: posicion inicial
+    Salidas:
+    Lista dibujada en pantalla
+    Restricciones:
+    top_archivos debe ser una lista de diccionarios
+    """
     dibujar_texto(ventana, fuente, "10 ARCHIVOS MAS GRANDES", (0, 0, 0), x, y)
     y += 24
     contador = 1
@@ -196,6 +377,18 @@ def dibujar_top_archivos(ventana, fuente, top_archivos, x, y):
 
 
 def dibujar_top_directorios(ventana, fuente, top_directorios, x, y):
+    """
+    Subrutina que dibuja el reporte del top 10 global de directorios con mas archivos directos.
+    Entradas:
+    ventana: superficie de pygame
+    fuente: fuente de pygame
+    top_directorios: lista con los directorios
+    x, y: posicion inicial
+    Salidas:
+    Lista dibujada en pantalla
+    Restricciones:
+    top_directorios debe ser una lista de diccionarios
+    """
     dibujar_texto(ventana, fuente, "10 DIRECTORIOS CON MAS ARCHIVOS", (0, 0, 0), x, y)
     y += 24
     contador = 1
@@ -208,6 +401,17 @@ def dibujar_top_directorios(ventana, fuente, top_directorios, x, y):
 
 
 def mostrar_grafico(datos, top_archivos, top_directorios):
+    """
+    Subrutina que muestra la ventana principal con el grafico y los reportes
+    Entradas:
+    datos: diccionario anidado del directorio analizado
+    top_archivos: top 10 global de archivos
+    top_directorios: top 10 global de directorios
+    Salidas:
+    Ventana de pygame
+    Restricciones:
+    pygame debe estar instalado
+    """
     pygame.init()
     ventana = pygame.display.set_mode((ANCHO, ALTO))
     pygame.display.set_caption("Graficador de Espacio en Disco")
@@ -237,8 +441,36 @@ def mostrar_grafico(datos, top_archivos, top_directorios):
 
 
 def imprimir_resumen(datos, top_archivos, top_directorios):
+    """
+    Subrutina que imprime un resumen en consola con los resultados principales.
+    Entradas:
+    datos: diccionario anidado
+    top_archivos: lista de archivos mas grandes
+    top_directorios: lista de directorios con mas archivos
+    Salidas:
+    Impresion en pantalla de consola
+    """
+    print("RESUMEN DEL ANALISIS")
+    print("--------------------")
+    print("")
+    print("10 ARCHIVOS MÁS GRANDES")
+    print("-----------------------")
+    print("")
+    print("10 DIRECTORIOS CON MÁS ARCHIVOS DIRECTOS")
+    print("----------------------------------------")
+
+
 
 def main():
+    """
+    Programa principal del graficador de espacio en disco
+    Entradas:
+    Ninguna
+    Salidas:
+    Analisis del directorio y ventana grafica
+    Restricciones:
+    El usuario debe seleccionar una carpeta y pygame debe estar instalado
+    """
     try:
         ruta = pedir_directorio()
         top_archivos = []
@@ -247,7 +479,7 @@ def main():
         imprimir_resumen(datos, top_archivos, top_directorios)
         mostrar_grafico(datos, top_archivos, top_directorios)
     except Exception as e:
-        easygui.msgbox("ERROR: " + str(e))
+        easygui.msgbox("Error: " + str(e))
 
 
 main()
