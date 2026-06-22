@@ -1,23 +1,253 @@
-import os.path
 import os
-def main():
-    nombre_archivo = input("Escriba el nombre del archivo a analizar: ")
-    if not os.path.exists(nombre_archivo)or not os.path.isfile(nombre_archivo):
-        print("Archivo no encontrado o archivo no válido.")
-        return
-    texto = input("Escriba el texto a buscar: ")
-    with open(nombre_archivo, "r", encoding = "utf-8") as archivo:
-        coincidencias = 0
-        for numero, linea in enumerate(archivo):
-            if texto in linea:
-                print(f"Lineas {numero + 1}: {linea}")
-                coincidencias += 1
-    if coincidencias == 0:
-        print("No se encontraron coincidencias.")
-    else:
-        print(f"Se encontraron {coincidencias} coincidencias.")
+import easygui
+import pygame
 
-if __name__ == "__main__":
-    main()
-                
-            
+ANCHO = 1300
+ALTO = 800
+MAX_NIVELES_GRAFICO = 6
+
+
+def pedir_directorio():
+    ruta = easygui.diropenbox("Seleccione el directorio que desea analizar")
+    if ruta == None:
+        raise Exception("Debe seleccionar un directorio.")
+    if not os.path.isdir(ruta):
+        raise Exception("La ruta seleccionada no es un directorio.")
+
+    return ruta
+
+
+def formato_tamano(tamano):
+    if tamano < 1024:
+        return str(tamano) + " B"
+    if tamano < 1024 ** 2:
+        return str(round(tamano / 1024, 2)) + " KB"
+    if tamano < 1024 ** 3:
+        return str(round(tamano / (1024 ** 2), 2)) + " MB"
+    if tamano < 1024 ** 4:
+        return str(round(tamano / (1024 ** 3), 2)) + " GB"
+    return str(round(tamano / (1024 ** 4), 2)) + " TB"
+
+
+def crear_diccionario_archivo(ruta):
+    return {"file": True, "nombre": os.path.basename(ruta), "ruta": ruta, "tamano": os.path.getsize(ruta)}
+
+
+def crear_diccionario_directorio(ruta):
+    nombre = os.path.basename(ruta)
+    if nombre == "":
+        nombre = ruta
+    return {"file": False, "nombre": nombre, "ruta": ruta, "tamano": 0, "hijos": [], "archivos_directos": 0}
+
+
+def ordenar_archivos(top):
+    for i in range(len(top) - 1):
+        for j in range(len(top) - i - 1):
+            if top[j]["tamano"] < top[j + 1]["tamano"]:
+                top[j], top[j + 1] = top[j + 1], top[j]
+
+
+def ordenar_directorios(top):
+    for i in range(len(top) - 1):
+        for j in range(len(top) - i - 1):
+            if top[j]["archivos_directos"] < top[j + 1]["archivos_directos"]:
+                top[j], top[j + 1] = top[j + 1], top[j]
+
+
+def actualizar_top_archivos(top_archivos, archivo):
+    top_archivos.append(archivo)
+    ordenar_archivos(top_archivos)
+    while len(top_archivos) > 10:
+        top_archivos.pop()
+
+
+def actualizar_top_directorios(top_directorios, directorio):
+    top_directorios.append(directorio)
+    ordenar_directorios(top_directorios)
+    while len(top_directorios) > 10:
+        top_directorios.pop()
+
+
+def analizar_directorio(ruta, top_archivos, top_directorios):
+    directorio = crear_diccionario_directorio(ruta)
+    try:
+        elementos = os.listdir(ruta)
+    except Exception:
+        return directorio
+    
+    for nombre in elementos:
+        ruta_nueva = os.path.join(ruta, nombre)
+        try:
+            if os.path.isfile(ruta_nueva):
+                archivo = crear_diccionario_archivo(ruta_nueva)
+                directorio["hijos"].append(archivo)
+                directorio["tamano"] += archivo["tamano"]
+                directorio["archivos_directos"] += 1
+                actualizar_top_archivos(top_archivos, archivo)
+            elif os.path.isdir(ruta_nueva):
+                subdirectorio = analizar_directorio(ruta_nueva, top_archivos, top_directorios)
+                directorio["hijos"].append(subdirectorio)
+                directorio["tamano"] += subdirectorio["tamano"]
+        except Exception:
+            pass
+    actualizar_top_directorios(top_directorios, directorio)
+    return directorio
+
+
+def contar_archivos_y_directorios(datos):
+    if datos["file"] == True:
+        return 1, 0
+    
+    archivos = 0
+    directorios = 1
+    for hijo in datos["hijos"]:
+        a, d = contar_archivos_y_directorios(hijo)
+        archivos += a
+        directorios += d
+    return archivos, directorios
+
+
+def recortar_texto(texto, largo):
+    if len(texto) <= largo:
+        return texto
+    return texto[:largo - 3] + "..."
+
+
+def color_por_nivel(nivel):
+    colores = [(232, 139, 193), (190, 165, 235), (152, 219, 165), (229, 157, 157), (246, 207, 132), (145, 204, 230), (207, 162, 218), (180, 210, 120)]
+    return colores[nivel % len(colores)]
+
+
+def dibujar_texto(ventana, fuente, texto, color, x, y):
+    imagen = fuente.render(texto, True, color)
+    ventana.blit(imagen, (x, y))
+
+
+def ordenar_hijos_por_tamano(hijos):
+    copia = hijos[:]
+    for i in range(len(copia) - 1):
+        for j in range(len(copia) - i - 1):
+            if copia[j]["tamano"] < copia[j + 1]["tamano"]:
+                copia[j], copia[j + 1] = copia[j + 1], copia[j]
+    return copia
+
+
+def dibujar_rectangulo(ventana, fuente, datos, x, y, ancho, alto, nivel):
+    if ancho <= 1 or alto <= 1:
+        return
+    color = color_por_nivel(nivel)
+    pygame.draw.rect(ventana, color, (x, y, ancho, alto))
+    pygame.draw.rect(ventana, (255, 255, 255), (x, y, ancho, alto), 1)
+    if ancho > 80 and alto > 23:
+        texto = recortar_texto(datos["nombre"], int(ancho // 8))
+        dibujar_texto(ventana, fuente, texto, (0, 0, 0), x + 4, y + 3)
+    if ancho > 90 and alto > 43:
+        tamano = formato_tamano(datos["tamano"])
+        dibujar_texto(ventana, fuente, tamano, (0, 0, 0), x + 4, y + 22)
+
+
+def dibujar_mapa(ventana, fuente, datos, x, y, ancho, alto, nivel):
+    if ancho <= 1 or alto <= 1:
+        return
+    dibujar_rectangulo(ventana, fuente, datos, x, y, ancho, alto, nivel)
+    if datos["file"] == True:
+        return
+    if nivel >= MAX_NIVELES_GRAFICO - 1:
+        return
+    if datos["tamano"] <= 0:
+        return
+    if datos["hijos"] == []:
+        return
+    hijos = ordenar_hijos_por_tamano(datos["hijos"])
+    if nivel % 2 == 0:
+        x_actual = x
+        for hijo in hijos:
+            proporcion = hijo["tamano"] / datos["tamano"]
+            ancho_hijo = int(ancho * proporcion)
+            if ancho_hijo < 2:
+                ancho_hijo = 2
+            dibujar_mapa(ventana, fuente, hijo, x_actual, y + 30, ancho_hijo, alto - 30, nivel + 1)
+            x_actual += ancho_hijo
+            if x_actual >= x + ancho:
+                break
+    else:
+        y_actual = y
+        for hijo in hijos:
+            proporcion = hijo["tamano"] / datos["tamano"]
+            alto_hijo = int(alto * proporcion)
+            if alto_hijo < 2:
+                alto_hijo = 2
+            dibujar_mapa(ventana, fuente, hijo, x + 30, y_actual, ancho - 30, alto_hijo, nivel + 1)
+            y_actual += alto_hijo
+            if y_actual >= y + alto:
+                break
+
+
+def dibujar_top_archivos(ventana, fuente, top_archivos, x, y):
+    dibujar_texto(ventana, fuente, "10 ARCHIVOS MAS GRANDES", (0, 0, 0), x, y)
+    y += 24
+    contador = 1
+    for archivo in top_archivos:
+        texto = str(contador) + ". " + recortar_texto(archivo["ruta"], 55)
+        dibujar_texto(ventana, fuente, texto, (0, 0, 0), x, y)
+        dibujar_texto(ventana, fuente, formato_tamano(archivo["tamano"]), (0, 0, 0), x + 430, y)
+        y += 18
+        contador += 1
+
+
+def dibujar_top_directorios(ventana, fuente, top_directorios, x, y):
+    dibujar_texto(ventana, fuente, "10 DIRECTORIOS CON MAS ARCHIVOS", (0, 0, 0), x, y)
+    y += 24
+    contador = 1
+    for directorio in top_directorios:
+        texto = str(contador) + ". " + recortar_texto(directorio["ruta"], 55)
+        dibujar_texto(ventana, fuente, texto, (0, 0, 0), x, y)
+        dibujar_texto(ventana, fuente, str(directorio["archivos_directos"]), (0, 0, 0), x + 430, y)
+        y += 18
+        contador += 1
+
+
+def mostrar_grafico(datos, top_archivos, top_directorios):
+    pygame.init()
+    ventana = pygame.display.set_mode((ANCHO, ALTO))
+    pygame.display.set_caption("Graficador de Espacio en Disco")
+    fuente = pygame.font.SysFont("arial", 14)
+    fuente_titulo = pygame.font.SysFont("arial", 22, True)
+    reloj = pygame.time.Clock()
+    archivos, directorios = contar_archivos_y_directorios(datos)
+    salir = False
+    while not salir:
+        for evento in pygame.event.get():
+            if evento.type == pygame.QUIT:
+                salir = True
+        ventana.fill((255, 255, 255))
+        dibujar_texto(ventana, fuente_titulo, "Graficador de Espacio en Disco", (0, 0, 0), 30, 20)
+        dibujar_texto(ventana, fuente, "Directorio: " + recortar_texto(datos["ruta"], 120), (0, 0, 0), 30, 52)
+        dibujar_texto(ventana, fuente, "Tamano total: " + formato_tamano(datos["tamano"]), (0, 0, 0), 30, 72)
+        dibujar_texto(ventana, fuente, "Archivos: " + str(archivos) + "    Directorios: " + str(directorios), (0, 0, 0), 30, 92)
+        pygame.draw.rect(ventana, (0, 0, 0), (30, 120, 1240, 330), 1)
+        dibujar_mapa(ventana, fuente, datos, 31, 121, 1238, 328, 0)
+        dibujar_top_archivos(ventana, fuente, top_archivos, 30, 480)
+        dibujar_top_directorios(ventana, fuente, top_directorios, 690, 480)
+        dibujar_texto(ventana, fuente, "El grafico muestra maximo 6 niveles, pero el programa analiza todo el directorio.", (90, 90, 90), 30, 765)
+        pygame.display.update()
+        reloj.tick(30)
+
+    pygame.quit()
+
+
+def imprimir_resumen(datos, top_archivos, top_directorios):
+
+def main():
+    try:
+        ruta = pedir_directorio()
+        top_archivos = []
+        top_directorios = []
+        datos = analizar_directorio(ruta, top_archivos, top_directorios)
+        imprimir_resumen(datos, top_archivos, top_directorios)
+        mostrar_grafico(datos, top_archivos, top_directorios)
+    except Exception as e:
+        easygui.msgbox("ERROR: " + str(e))
+
+
+main()
